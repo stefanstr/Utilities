@@ -2,10 +2,13 @@
 
 The goal: an n-dimensional array that can be dynamically initialized with the
 following properties:
-- fixed size
+- fixed size or dynamic
 - ideally fields should be in nil status if not initialized
+- n-dimensional
+- default value for fields should be possible
+- it should be possible to delimit valid values of fields
 - not possible to add properties outside of fields
-- addition and substraction of arrays
+- addition and subtraction of arrays
 - concatenation of arrays
 - the constructor should specify the allowed type to be stored in a cell (number,
 string, a table with a specific metatable...)
@@ -40,7 +43,7 @@ newArrayType = function (name, cell_prototype, length)
 	
 	hidden.check_prototype = function (value)
 		if not (type(cell_prototype) == "number" or type(cell_prototype) == "string"
-				or getmetatable({})) then
+				or getmetatable(value)) then
 			error("The cell_prototype must be a number, a string or an object (i.e., a table with a metatable).", 3)
 		end
 	end
@@ -76,18 +79,14 @@ newArrayType = function (name, cell_prototype, length)
 	--the below __call event.
 	
 	array_meta.__call = function (...)
-	-- The actual array constructor. length is the number of fields. 
-	-- initvalue is the value with which the array should be initialized
-	-- for fixed length arrays, the arguments go ([initvalue])
-	-- for variable length arrays, the arguments go ([initvalue], [length])
-		local _, length, initvalue -- _ is needed to catch "self" - the first arg
-		if hidden.length then
-			_, initvalue = ...
-			length = hidden.length
-		else
-			_, initvalue, length = ...
-			hidden.check_length(length)
-		end
+		-- The actual array constructor. length is the number of fields. 
+		-- initvalue is the value with which the array should be initialized
+		-- for fixed length arrays, the arguments go ([initvalue])
+		-- for variable length arrays, the arguments go ([initvalue], [length])
+		local _, initvalue, length = ...
+		-- _ is needed to catch "self" - the first arg
+		length = hidden.length or length
+		hidden.check_length(length)
 		
 		local array_temp = {}
 		
@@ -133,5 +132,22 @@ end -- end of array *type* constructor. It returns the type/metatable.
 
 
 -- TESTS --
-byte = newArrayType ("byte", 0, 8)
-word = newArrayType ("word", byte, 8) -> making this work is the next step
+numberType = newArrayType ("numberType", 0, 10)
+numbers = numberType(0)
+matrixType = newArrayType ("matrixType", numbers, 10)
+matrix = matrixType(numbers)
+for i=1, 10 do 
+	for j=1, 10 do
+		print (matrix[i][j]) 
+end end
+
+
+--byteType = newArrayType ("byte", 0, 8)
+--wordType = newArrayType ("word", byteType(), 8) --> making this work is the next step
+--word1 = wordType(1)
+--for i=1, 8 do
+--	for j=1, 8 do
+--		word1[i][j] = math.random(1,5)
+--	end
+--end
+--print(word1[3][3], word1[1][1])
