@@ -42,15 +42,20 @@ newArrayType = function (name, cell_prototype, length)
 	end
 	
 	hidden.check_prototype = function (value)
-		if not (type(cell_prototype) == "number" or type(cell_prototype) == "string"
+		if not (type(value) == "number" or type(value) == "string"
 				or getmetatable(value)) then
 			error("The cell_prototype must be a number, a string or an object (i.e., a table with a metatable).", 3)
 		end
 	end
 	
 	hidden.check_value_type = function (value)
-		if type(hidden.cell_prototype) ~= type(value) then
-			error("Incorrect value assignment. The correct value type for array " .. hidden.name .. " is " .. type(hidden.cell_prototype), 3)
+		if (type(hidden.cell_prototype) ~= type(value))
+				or (getmetatable(hidden.cell_prototype) ~= getmetatable(value)) then
+			local message = "Incorrect value assignment. The correct value type for array " .. hidden.name .. " is " .. type(hidden.cell_prototype)
+			if type(hidden.cell_prototype) == "table" then
+				message = message .. " with metatable " .. tostring(getmetatable(hidden.cell_prototype))
+			end
+			error(message, 3)
 		end
 	end
 	
@@ -110,6 +115,15 @@ newArrayType = function (name, cell_prototype, length)
 		-- array_values.
 		array_type.__metatable = "ArrayType:[" .. hidden.name .. "]"
 		
+		array_type.__tostring = function ()
+			local repr = "Array of type " .. hidden.name .. " with the following entries:\n"
+			for k, v in pairs (array_values) do
+				v = tostring(v)
+				repr = repr .. '["' .. k .. '"]=' .. v .. "; "
+			end
+			return repr
+		end
+		
 		array_type.__index = function (table, key)
 			hidden.check_table_and_key(table, key)
 			return array_values[key] or array_values.default
@@ -132,22 +146,17 @@ end -- end of array *type* constructor. It returns the type/metatable.
 
 
 -- TESTS --
-numberType = newArrayType ("numberType", 0, 10)
-numbers = numberType(0)
-matrixType = newArrayType ("matrixType", numbers, 10)
-matrix = matrixType(numbers)
-for i=1, 10 do 
-	for j=1, 10 do
-		print (matrix[i][j]) 
-end end
+mt = {__index=mt, x=1, y=1}
+t = {}
+u = {x=4}
+v = {}
+setmetatable(t, mt)
+setmetatable(u, mt)
+AType = newArrayType("AType", t, 3)
+array = AType(u)
+print(array)
+print(array[3].x)
+array[1] = t
+newArrayType("new", {}, 3)
 
 
---byteType = newArrayType ("byte", 0, 8)
---wordType = newArrayType ("word", byteType(), 8) --> making this work is the next step
---word1 = wordType(1)
---for i=1, 8 do
---	for j=1, 8 do
---		word1[i][j] = math.random(1,5)
---	end
---end
---print(word1[3][3], word1[1][1])
