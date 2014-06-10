@@ -41,13 +41,6 @@ newArrayType = function (name, cell_prototype, length)
 		end
 	end
 	
-	hidden.check_prototype = function (value)
-		if not (type(value) == "number" or type(value) == "string"
-				or getmetatable(value)) then
-			error("The cell_prototype must be a number, a string or an object (i.e., a table with a metatable).", 3)
-		end
-	end
-	
 	hidden.check_value_type = function (value)
 		if (type(hidden.cell_prototype) ~= type(value))
 				or (getmetatable(hidden.cell_prototype) ~= getmetatable(value)) then
@@ -56,6 +49,15 @@ newArrayType = function (name, cell_prototype, length)
 				message = message .. " with metatable " .. tostring(getmetatable(hidden.cell_prototype))
 			end
 			error(message, 3)
+		end
+		if hidden.allowed_values then
+			local ok = false
+			for _, v in ipairs (hidden.allowed_values) do
+				if value == v then ok = true end
+			end
+			if not ok then
+				error("Value assignment outside of the allowed values.", 3)
+			end
 		end
 	end
 	
@@ -76,8 +78,19 @@ newArrayType = function (name, cell_prototype, length)
 	-- Saving arguments as hidden parameters.
 	hidden.check_length(length)
 	hidden.length = length
-	hidden.check_prototype(cell_prototype)
-	hidden.cell_prototype = cell_prototype
+	
+	-- if cell prototype is a non-empty table with no metatable, we assume it contains
+	-- the set of allowed values for the array
+	if type(cell_prototype) == "table" and not getmetatable(cell_prototype) 
+														and #cell_prototype > 0 then
+		hidden.cell_prototype = cell_prototype[1] -- we still need to store the prototype
+		hidden.allowed_values = {}
+		for _, v in ipairs (cell_prototype) do
+			table.insert(hidden.allowed_values, v)
+		end
+	else
+		hidden.cell_prototype = cell_prototype
+	end
 		
 	array_meta = {} -- metatable for the array type
 	-- A separate meta-metatable is necessary, because the actual type is created within
@@ -146,17 +159,6 @@ end -- end of array *type* constructor. It returns the type/metatable.
 
 
 -- TESTS --
-mt = {__index=mt, x=1, y=1}
-t = {}
-u = {x=4}
-v = {}
-setmetatable(t, mt)
-setmetatable(u, mt)
-AType = newArrayType("AType", t, 3)
-array = AType(u)
-print(array)
-print(array[3].x)
-array[1] = t
-newArrayType("new", {}, 3)
-
-
+byteType = newArrayType ("byte", {}, 8)
+byte = byteType()
+byte[1] = "abc"
