@@ -8,18 +8,20 @@ following properties:
 - default value for fields should be possible
 - it should be possible to delimit valid values of fields
 - not possible to add properties outside of fields
-- addition and subtraction of arrays
+- addition and subtraction of arrays (if adding field value maybe allow to add as next field?
 - concatenation of arrays
 - the constructor should specify the allowed type to be stored in a cell (number,
 string, a table with a specific metatable...)
 
 There will be a separate structure for 1-dimensional array. Once this is working, I will
 figure out how to do secure multidimensional arrays.
+
+Idea: make also arrays callable. It will make it easier for multi-D ones, e.g.,
+instead of array[1][1][1] = x -> array(1,1,1) = x
 ]]--
 
 
-
-newArrayType = function (name, cell_prototype, length)
+local newArrayType = function (name, cell_prototype, length)
 -- Creates a new type of array with the given name, cell_prototype and length.
 -- name is the name for the metatable, cell_prototype tells us what
 -- values the array should be able to store (numbers, strings, specific tables).
@@ -83,7 +85,7 @@ newArrayType = function (name, cell_prototype, length)
 	-- the set of allowed values for the array
 	if type(cell_prototype) == "table" and not getmetatable(cell_prototype) 
 														and #cell_prototype > 0 then
-		hidden.cell_prototype = cell_prototype[1] -- we still need to store the prototype
+		hidden.cell_prototype = cell_prototype[1] -- we still need to store a prototype for healthchecks
 		hidden.allowed_values = {}
 		for _, v in ipairs (cell_prototype) do
 			table.insert(hidden.allowed_values, v)
@@ -156,9 +158,13 @@ newArrayType = function (name, cell_prototype, length)
 	return array_type
 end -- end of array *type* constructor. It returns the type/metatable.
 
-
+-- ADD EXPORT via a table like array.something
 
 -- TESTS --
-byteType = newArrayType ("byte", {}, 8)
-byte = byteType()
-byte[1] = "abc"
+mazeRow = newArrayType("mazeRow", {'#', ' '})
+row = mazeRow(" ", 100)
+mazeType = newArrayType("maze", row, 100)
+maze = mazeType(row, 100) -- to be able to use tables for prototypes, we need deepcopy
+-- alternative: pass constructors as prototypes??
+maze[1][1] = '#' -- ERROR - this has assigned '#' to all rows 
+print(maze)
