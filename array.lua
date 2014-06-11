@@ -1,3 +1,5 @@
+#!/usr/local/bin/lua
+
 --[[The array class.
 
 The goal: an n-dimensional array that can be dynamically initialized with the
@@ -116,6 +118,9 @@ local newArrayType = function (name, cell_prototype, length)
 		local array_values = {} 
 		if initvalue then 
 			hidden.check_value_type (initvalue)
+			if type(initvalue) == "table" then
+				error("Providing tables as initial values is currently not supported.", 3)
+			end
 			if length then -- initialize with values
 				for i=1, length do
 					array_values[i] = initvalue
@@ -158,13 +163,19 @@ local newArrayType = function (name, cell_prototype, length)
 	return array_type
 end -- end of array *type* constructor. It returns the type/metatable.
 
+local newMatrix = function (name, cell_prototype, width, height, default_value)
+	local column = newArrayType (name, cell_prototype, height)(default_value)
+	local matrix = newArrayType (name, column, width)()
+	for w=1, width do
+		matrix[w] = newArrayType (name, cell_prototype, height)(default_value)
+	end
+	return matrix
+end
+
 -- ADD EXPORT via a table like array.something
 
 -- TESTS --
-mazeRow = newArrayType("mazeRow", {'#', ' '})
-row = mazeRow(" ", 100)
-mazeType = newArrayType("maze", row, 100)
-maze = mazeType(row, 100) -- to be able to use tables for prototypes, we need deepcopy
--- alternative: pass constructors as prototypes??
-maze[1][1] = '#' -- ERROR - this has assigned '#' to all rows 
+maze = newMatrix ("maze", {'#', ' '}, 200, 200, ' ')
+
+-- alternative: pass constructors as default values??
 print(maze)
