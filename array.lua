@@ -176,6 +176,16 @@ end
 
 -- TESTS --
 maze = newMatrix ("maze", {'#', ' '}, 200, 200, ' ')
+maze2 = newMatrix ("maze2", nil, 200, 200)
+
 
 -- alternative: pass constructors as default values??
-print(maze)
+
+--[[ How should it ideally look like? (pseudocode)
+map = Matrix (200x200, field_definition)
+map.initialize (empty_field)
+
+byte = Matrix (8, [0, 1])
+byte.ingest({1,0,0,1,1,1,0,1})
+byte.ingest(23)
+]]--
