@@ -53,17 +53,17 @@ local newMap = function (width, height, default_value, allowed_values)
 		return "a " .. width .. " x " .. height .. " map"
 	end
 	
-	map_meta.__index = function (table, column_key)
-
-	end
-	
-	map_meta.__newindex = function (table, column_key, value)
-		
-	end
+--	map_meta.__index = function (table, column_key)
+--
+--	end
+--	
+--	map_meta.__newindex = function (table, column_key, value)
+--		
+--	end
 	
 	local values = {} -- this stores the map's values (necessary to enable value-checking).
 	for w=1, width do
-		table.insert(values, setmetatable(row, row_metatable)
+		table.insert(values, setmetatable(row, row_metatable))
 	end
 	if default_value then
 		--initialize table
