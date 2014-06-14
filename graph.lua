@@ -1,11 +1,18 @@
 #!/usr/local/bin/lua
 
+--[[TO DO
+- "2D graph"
+	- vertices
+	- multiple connections? -> integrate delaunay/gabriel and Voronoi in 1 graph?
+		-> also to allow for delaunay and gabriel in the same graph
+]]--
+
 -- playing with graphs --
 
-Node = {}
+local Node = {}
 Node.__index = Node
 
-function Node:connect (node_id)
+function Node:connect (node_id) -- public
 	if not self.nodes[node_id] then
 		self.connections = self.connections + 1
 	end
@@ -13,12 +20,12 @@ function Node:connect (node_id)
 	return (graph.hash[node_id])
 end
 
-function Node:disconnect (node_id)
+function Node:disconnect (node_id) -- public
 	self.nodes[node_id] = nil
 	self.connections = self.connections - 1
 end
 
-function Node:hasConnections()
+function Node:hasConnections() -- public
 	if self.connections > 0 then
 		return true
 	else
@@ -26,7 +33,13 @@ function Node:hasConnections()
 	end
 end
 
-function Node:printNode()
+function Node:clearConnections()
+	for k, v in pairs(self.nodes) do
+		self:disconnect(k)
+	end
+end
+
+function Node:printNode() -- public
 	io.write(self.id, "-->")
 	for k, _ in pairs(self.nodes) do
 		io.write(" ", k, ";")
@@ -34,29 +47,49 @@ function Node:printNode()
 	io.write("\n")
 end
 
-function Node:addPath(path)
+function Node:addPath(path) -- public
 	local prev = self
 	for _, v in ipairs(path) do
 		prev = prev:connect(v)
 	end
 end
 
-function Node:newNode (graph)
+function Node:getConnections() -- public
+	return self.nodes
+end
+
+local Graph = {}
+Graph.__index = Graph
+
+function Graph:newNode ()
 	local tmp = {}
 	tmp.nodes = {}
 	tmp.connections = 0
-	tmp.graph = graph
-	tmp.id = #graph.hash + 1
+	tmp.graph = self
+	tmp.id = #self.hash + 1
 	setmetatable (tmp, Node)
-	graph.hash[tmp.id] = tmp
-	return tmp
+	self.hash[tmp.id] = tmp
+	self.size = self.size + 1
+	return tmp.id
 end
 
-Graph = {}
-Graph.__index = Graph
+function Graph:removeNode(node)
+	self.hash[node] = nil
+	self.size = self.size - 1
+end
+
+function Graph:clearGraph()
+	for k, _ in pairs(self.hash) do
+		self:removeNode(k)
+	end
+end
 
 function Graph:__call (num)
 	return self.hash[num]
+end
+
+function Graph:getSize()
+	return self.size
 end
 
 function Graph:printGraph()
@@ -66,13 +99,25 @@ function Graph:printGraph()
 			v:printNode()
 		end
 	end
-end
-			
+end		
+
+function Graph:clearConnections()
+	for _, v in pairs(self.hash) do
+		if v:hasConnections() then
+			v:clearConnections()
+		end
+	end
+end	
+
 
 function Graph:newGraph(size, immutable)
+	self = {}
 	self.hash = {}
-	for i=1, size do
-		Node:newNode(self)
+	self.size = 0
+	if size and (size > 0) then
+		for i=1, size do
+			Node:newNode(self)
+		end
 	end
 	if immutable then
 		setmetatable(self.hash, {__newindex=function() error("You tried to add new nodes to an immutable graph.", 3) end})
@@ -80,4 +125,6 @@ function Graph:newGraph(size, immutable)
 	return setmetatable(self, Graph)
 end
 
-return Graph, Node
+graph = {Graph=Graph, Node=Node}
+
+return graph
