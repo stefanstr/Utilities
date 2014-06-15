@@ -1,79 +1,251 @@
 #!/usr/local/bin/lua
---[[
-Various random map generators
-]]--
+----------------------------------------
+-- TILED 2D MAP GENERATION ALGORITHMS --
+-- by gestaltist -----------------------
+----------------------------------------
 
--- A SPECIAL MAP TYPE --
+-- License: do whatever you want with this code. No warranty given. --
 
-local newMap = function (width, height, default_value, allowed_values)
-	-- This function generates a new 2D map with the given width and height.
-	-- Every field gets populated with the default value.
-	-- allowed_values can be a type name ("string", "number" and so on), a table with the
-	-- list of accepted values (e.g., {" ", "#", "*"} or a function which accepts an argument
-	-- and either returns it or raises an error.
-	
-	local map = {} -- the object to be returned at the end
-	
-	if width%1 ~= 0 or height%1 ~= 0 then
-		error ("The map's width and height need to be natural numbers.", 2)
+maps = {}
+
+function maps.initialize (seed)
+	seed = seed or os.time()
+	math.randomseed(seed)
+end
+
+maps.process = {} -- collects functions used to reprocess a given map according to certain rules
+maps.generate = {} -- contains convenience functions processing on empty maps (i.e., creating new ones)
+maps.tools = {} -- contains helper functions like identifying rooms
+
+-- CELLULAR AUTOMATA --
+function maps.generate.cellular (width, height,iterations, initial_percent_of_walls, rules)
+		local map = {}
+		for w=1, width do 
+			map[w] = {}
+		for h=1, height do
+			map[w][h] = (math.random(100) < initial_percent_of_walls) -- initializing with random walls
+		end
 	end
-	
-	local verify_value -- this is an internal function that checks the validity of a value
+	return maps.process.cellular(map, width, height,iterations, rules)
+end
 
-	-- Set up the internal function verify_value according to the argument allowed_values
-	if getmetatable(allowed_values) and getmetatable(allowed_values).__call 
-	   or (type(allowed_values) == "function") then 
-		verify_value = allowed_values
-	else
-		verify_value = function (value)
-			if allowed_values then
-				if type(allowed_values) == "string" then
-					if type(value) ~= allowed_values then
-						error("Only values of type " .. allowed_values .. " are allowed.", 2)
-					end
-				elseif type(allowed_values) == "table" then
-					local ok = false
-					for _, v in pairs(allowed_values) do
-						if value == v then
-							ok = true
-						end
-					end
-					if not ok then
-						error("Unallowed value passed to the map.", 2)
-					end
-				end
-			end
-			return value
+function maps.process.cellular (map, width, height,iterations, rules)
+	-- initializing 2 maps to use for iterations
+	-- this function only works with 2 types of values for individual cells: 
+		-- false means no wall
+		-- true means wall
+	-- rules is a map with any of the following rules as keys and numbers
+		-- allowed keys for the rules table are:
+		--"neighborhood" = 1  (von neumann) or 2 (von neumann extended) - otherwise, moore neighborhood is used
+		--"include_self" = whether the cell itself should be counted as part of the neighborhood. Default is false. 
+		--[numeric key] = state (number of neighboring walls is the key, its value (state) says what should happen)
+			-- possible states are:
+				-- "flip", i.e., change wall to no wall and vice versa
+				--	"stay", i.e., no action
+				-- "floor", i.e., change to floor
+				-- "wall", i.e., change to wall
+		-- "frame" - will put a wall on the outermost cells of the map after all transformations
+			-- "start" - before transformations
+			-- "end" - after transformations
+			-- "both" - both
+			
+	-- fullproofing the map against out of range queries (makes neighborhood calculations easier) --
+	local _mtrow = {__index = function () return false end}
+	local _mt = {__index = function () return setmetatable({}, _mtrow) end}
+	local map = setmetatable(map, _mt)
+	local map2 = setmetatable({}, _mt) -- needed as a temporary map during the iterations
+
+	-- initializing temporary map
+	for w=1, width do 
+		map2[w] = {}
+		for h=1, height do
+			map2[w][h] = false 
 		end
 	end
 	
-	-- The metatable --
-	local map_meta = {} -- the metatable for the map
-	map_meta.__tostring = function ()
-		return "a " .. width .. " x " .. height .. " map"
+	if rules.frame == "start" or rules.frame == "both" then -- add walls to the edges of the map
+		for x=1, width do
+			map[x][1] = true
+			map[x][height] = true
+		end
+		for y=2, height-1 do
+			map[1][y] = true
+			map[width][y] = true
+		end
 	end
-	
---	map_meta.__index = function (table, column_key)
---
---	end
---	
---	map_meta.__newindex = function (table, column_key, value)
---		
---	end
-	
-	local values = {} -- this stores the map's values (necessary to enable value-checking).
-	for w=1, width do
-		table.insert(values, setmetatable(row, row_metatable))
-	end
-	if default_value then
-		--initialize table
-	end
-				
 
+	local rn = rules.neighborhood
+	if (rn ~= 1) and (rn ~=2) then rn = nil end -- other numbers would 
+	for n=1, iterations do
+		for w=1, width do
+			for h=1, height do
+				-- calculate the number of neighbors --
+				local neighbors = 0 
+				if rn then -- von neumann neighborhood
+					for n=(-rn), rn do
+						if (n ~= 0) then
+							if map[w+n][h] then neighbors = neighbors + 1 end
+							if map[w][h+n] then neighbors = neighbors + 1 end	
+						elseif rules.include_self then
+							if map[w][h] then neighbors = neighbors + 1 end
+						end		
+					end	
+				else -- Moore neighborhood used as default
+					for nx=(-1), 1 do
+						for ny=(-1), 1 do
+							if (nx ~= 0) or (ny ~= 0) then
+								if map[w+nx][h+ny] then neighbors = neighbors + 1 end
+							elseif rules.include_self then
+								if map[w][h] then neighbors = neighbors + 1 end
+							end
+						end
+					end
+				end
+				-- take action based on the number of neighbors and store the results in the temporary map --
+				if rules[neighbors] == "flip" then
+					map2[w][h] = not map[w][h]
+				elseif rules[neighbors] == "floor" then
+					map2[w][h] = false
+				elseif rules[neighbors] == "wall" then
+					map2[w][h] = true
+				else
+					map2[w][h] = map[w][h]
+				end
+			end
+		end
+		map, map2 = map2, map -- swap maps so the actual map stores the results of the iteration. map2 will be overwritten anyway
+	end
 	
-	return setmetatable(map, map_meta)
+	if rules.frame == "end" or rules.frame == "both" then -- add walls to the edges of the map
+		for x=1, width do
+			map[x][1] = true
+			map[x][height] = true
+		end
+		for y=2, height-1 do
+			map[1][y] = true
+			map[width][y] = true
+		end
+	end
+	
+	return setmetatable(map, {}) -- removing the metatable _mt
+end
+-------------------
+
+-- REMOVING DISCONNECTED ROOMS --
+
+-- helper function for identifying the room a cell is in
+function maps.tools.getRoom (map, x, y, _checked)
+
+	local function needs_checking (x, y, checked)
+		if (x < 1) or (x > #map) or (y < 1) or (y > #map[1]) -- out of bounds
+			or checked[x][y] or map[x][y] then -- has been checked or is a wall
+			return false
+		else
+			return true
+		end
+	end
+	
+	local function merge_rooms (room1, room2)
+		for k,v in pairs(room2) do table.insert(room1, v) end
+	end
+	
+	local room = {{["x"]=x; ["y"]=y}}
+	local checked = _checked or {}
+	if #checked == 0 then
+		for x=1, #map do 
+			checked[x] = {}
+			for y=1, #map[1] do
+				checked[x][y] = false
+			end
+		end
+	end
+	checked[x][y] = true
+	
+	if needs_checking(x-1, y, checked) then
+		merge_rooms(room, maps.tools.getRoom(map, x-1, y, checked))
+	end
+	if needs_checking(x+1, y, checked) then
+		merge_rooms(room, maps.tools.getRoom(map, x+1, y, checked))
+	end
+	if needs_checking(x, y-1, checked) then
+		merge_rooms(room, maps.tools.getRoom(map, x, y-1, checked))
+	end
+	if needs_checking(x, y+1, checked) then
+		merge_rooms(room, maps.tools.getRoom(map, x, y+1, checked))
+	end
+	
+	return room
 end
 
 
--- TESTS --
-map = newMap(200, 200, nil, "number")
+-- this function identifies rooms that have no connection to the rest of the map and removes them
+-- (i.e., it removes all rooms besides the biggest one)
+-- unless "how_many" is given - in which case only so many smallest rooms will be removed
+function maps.process.removeDisconnected (map, how_many) 
+	local width = #map
+	local height = #map[1]
+	local rooms = {} -- this will contain all found rooms
+	local to_check = {} -- this will contain coords of all cells, see below:
+	for w=1, width do
+		to_check[w] = {}
+		for h=1, height do
+			to_check[w][h] = true
+		end
+	end
+	
+	-- assign cells to rooms
+	for w=1, width do
+		for h=1, height do
+			if to_check[w][h] then
+				if map[w][h] then -- the cell is a wall
+					to_check[w][h] = false
+				else -- the cell is a floor
+					-- get the room that cell is in --
+					local room = maps.tools.getRoom(map, w, h)
+					-- add it to the list of rooms --
+					table.insert(rooms, room)
+					-- remove all the cells in the room from the check
+					for _, v in pairs(room) do
+						to_check[v.x][v.y] = false
+					end
+				end				
+			end
+		end
+	end
+	-- sort rooms to find the biggest ones
+	table.sort(rooms, function (r1, r2) return #r1 > #r2 end)
+	
+	-- creating the map to be returned as a result
+	map2 = {}
+	for w=1, width do 
+		map2[w] = {}
+		for h=1, height do
+			map2[w][h] = map[w][h] -- copying the input map
+		end
+	end
+	
+	-- removing all rooms besides the biggest one
+	if #rooms > 1 then
+		local stop = (how_many and #rooms-how_many+1) or 2
+		for r=#rooms, stop, -1 do
+			for _, v in pairs(rooms[r]) do
+				map2[v.x][v.y] = true
+			end
+		end
+	end	
+	return map2
+end
+-------------------
+
+-- INVERT WALLS AND FLOOR --
+
+function maps.process.invert (map)
+	map2 = {}
+	for w=1, #map do 
+		map2[w] = {}
+		for h=1, #map[1] do
+			map2[w][h] = not map[w][h] 
+		end
+	end
+	return map2
+end
